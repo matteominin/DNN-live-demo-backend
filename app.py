@@ -1,9 +1,11 @@
 import io
-import torch
 from PIL import Image
 from flask_cors import CORS
-from flask import Flask, jsonify, request
+from torch.nn import Linear
+from torch import load, device
 from torchvision.models import resnet18
+from torch.nn.functional import softmax
+from flask import Flask, jsonify, request
 import torchvision.transforms as transforms
 
 app = Flask(__name__)
@@ -23,8 +25,8 @@ def transform_image(image_bytes):
     
 # Load the model
 model = resnet18(weights='ResNet18_Weights.DEFAULT')
-model.fc = torch.nn.Linear(model.fc.in_features, 10)
-state_dict = torch.load('model.pth', map_location=torch.device('cpu'))
+model.fc = Linear(model.fc.in_features, 10)
+state_dict = load('model.pth', map_location=device('cpu'))
 model.load_state_dict(state_dict['model_state_dict'])
 model.eval()
 
@@ -45,8 +47,8 @@ def get_prediction(image_bytes):
     tensor = transform_image(image_bytes=image_bytes)
     outputs = model.forward(tensor)
     _, y_hat = outputs.max(1)
-    confidence = torch.nn.functional.softmax(outputs, dim=1)[0][y_hat].item()
-    confidences = torch.nn.functional.softmax(outputs, dim=1)[0].tolist()
+    confidence = softmax(outputs, dim=1)[0][y_hat].item()
+    confidences = softmax(outputs, dim=1)[0].tolist()
     return y_hat.item(), confidence, confidences
 
 @app.route('/predict', methods=['POST'])
@@ -56,6 +58,10 @@ def predict():
         img_bytes = file.read()
         class_id, confidence, confidences = get_prediction(image_bytes=img_bytes)
         return jsonify({'class': labels[class_id], 'confidence': confidence, 'confidences': confidences})
+
+@app.route('/')
+def index():
+    return jsonify({'message': 'Server is running!'})
 
 if __name__ == '__main__':
     app.run()
